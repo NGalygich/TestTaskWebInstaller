@@ -1,6 +1,9 @@
 #include <windows.h>
 
 
+#define ID_BUTTON_START 1001
+
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow)
@@ -21,9 +24,9 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 		0,
 		CLASS_NAME,
 		L"Тестовое окно",          
-		WS_OVERLAPPEDWINDOW,          
+		WS_OVERLAPPED,
 		CW_USEDEFAULT, CW_USEDEFAULT, 
-		500, 400,                     
+		500, 300,                     
 		nullptr, nullptr, hInst, nullptr
 	);
 
@@ -46,9 +49,24 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
 	switch (uMsg) {
-	case WM_DESTROY: 
-		PostQuitMessage(0);
-		return 0;
+
+		case WM_CREATE:
+		{
+			CreateWindow(L"STATIC", L"Режим работы", WS_CHILD | WS_VISIBLE, 300, 50, 100, 25, hwnd, nullptr, nullptr, nullptr);
+			CreateWindow(L"msctls_progress32", nullptr, WS_CHILD | WS_VISIBLE, 50, 100, 400, 30, hwnd, nullptr, nullptr, nullptr);
+			CreateWindow(L"STATIC", L"Процент выполнения", WS_CHILD | WS_VISIBLE, 150, 100, 200, 30, hwnd, nullptr, nullptr, nullptr);			
+			CreateWindow(L"BUTTON", L"Начать", WS_CHILD | WS_VISIBLE, 200, 150, 100, 25, hwnd, (HMENU)ID_BUTTON_START, nullptr, nullptr);
+		
+			return 0;
+		}
+
+		case WM_DESTROY: 
+		{
+			PostQuitMessage(0);
+
+			return 0;
+		}		
+
 	}
 
 	return DefWindowProc(hwnd, uMsg, wParam, lParam);
