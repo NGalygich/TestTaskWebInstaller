@@ -1,16 +1,72 @@
 #include <windows.h>
 #include <commctrl.h>
+#include <string>
+#include <algorithm>
+#include <vector>
 
 #define ID_BUTTON_START 1001
 
 HWND g_hProgress = nullptr;
 HWND g_hPercentText = nullptr;
+HWND g_hModeText = nullptr;
 
+std::wstring g_currentMode = L"Не определен";
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
+// Функция для разбиения строки на аргументы
+std::vector<std::wstring> ParseCommandLine(LPCWSTR cmdLine)
+{
+	std::vector<std::wstring> args;
+	std::wstring arg;
+	bool inQuotes = false;
+
+	for (int i = 0; cmdLine[i] != L'\0'; i++) {
+		if (cmdLine[i] == L'"') {
+			inQuotes = !inQuotes;
+		}
+		else if (cmdLine[i] == L' ' && !inQuotes) {
+			if (!arg.empty()) {
+				args.push_back(arg);
+				arg.clear();
+			}
+		}
+		else {
+			arg += cmdLine[i];
+		}
+	}
+
+	if (!arg.empty()) {
+		args.push_back(arg);
+	}
+
+	return args;
+}
+
+// Функция для определения режима по аргументам командной строки
+std::wstring DetermineModeFromCommandLine()
+{
+	LPWSTR cmdLine = GetCommandLine();
+	std::vector<std::wstring> args = ParseCommandLine(cmdLine);
+
+	for (size_t i = 1; i < args.size(); i++) {
+		std::wstring argLower = args[i];
+		std::transform(argLower.begin(), argLower.end(), argLower.begin(), ::towlower);
+
+		if (argLower == L"-wininet") {
+			return L"Режим wininet";
+		}
+		else if (argLower == L"-curl") {
+			return L"Режим curl";
+		}
+	}
+
+	return L"Режим по умолчанию";
+}
+
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow)
 {
+	g_currentMode = DetermineModeFromCommandLine();
 	const wchar_t CLASS_NAME[] = L"Main Window Class";
 
 	WNDCLASS wc = {};
@@ -51,11 +107,15 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
+	
+
 	switch (uMsg) {
 
 		case WM_CREATE:
 		{
-			CreateWindow(L"STATIC", L"Режим работы", WS_CHILD | WS_VISIBLE, 300, 30, 100, 25, hwnd, nullptr, nullptr, nullptr);
+			std::wstring modeText = L"Режим работы: " + g_currentMode;
+
+			g_hModeText = CreateWindow(L"STATIC", modeText.c_str(), WS_CHILD | WS_VISIBLE, 150, 30, 300, 25, hwnd, nullptr, nullptr, nullptr);
 			g_hPercentText = CreateWindow(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 50, 70, 200, 30, hwnd, nullptr, nullptr, nullptr);
 			g_hProgress = CreateWindow(L"msctls_progress32", nullptr, WS_CHILD | WS_VISIBLE, 50, 100, 400, 30, hwnd, nullptr, nullptr, nullptr);	
 			CreateWindow(L"BUTTON", L"Начать", WS_CHILD | WS_VISIBLE, 200, 150, 100, 25, hwnd, (HMENU)ID_BUTTON_START, nullptr, nullptr);
