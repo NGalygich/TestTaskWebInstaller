@@ -2,15 +2,18 @@
 #include <commctrl.h>
 #include <wininet.h>
 #include <string>
+#include <winhttp.h> 
 
 #pragma comment(lib, "wininet.lib")
 #pragma comment(lib, "comctl32.lib")
+#pragma comment(lib, "winhttp.lib")
 
 #define ID_BUTTON_START 1001
 
 HWND g_hProgress = nullptr;
 HWND g_hPercentText = nullptr;
 std::wstring g_currentMode = L"";
+wchar_t g_startTimeStr[50];
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
@@ -67,11 +70,18 @@ bool DownloadFileWininet(const char* url, const char* outputFile) {
 
 		if (totalSize > 0) {
 			int percent = (totalBytesRead * 100) / totalSize;
-			PostMessage(g_hProgress, PBM_SETPOS, percent, 0);
+
+			SendMessage(g_hProgress, PBM_SETPOS, percent, 0);
 
 			wchar_t percentText[50];
 			wsprintf(percentText, L"%d%%", percent);
 			SetWindowText(g_hPercentText, percentText);
+
+			MSG msg;
+			while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+				TranslateMessage(&msg);
+				DispatchMessage(&msg);
+			}
 		}
 	}
 
@@ -81,12 +91,55 @@ bool DownloadFileWininet(const char* url, const char* outputFile) {
 	return true;
 }
 
+bool SendStats(const std::wstring& startTime, const std::wstring& workMode) {
+	HINTERNET hSession = WinHttpOpen(L"Stats Client", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, NULL, NULL, 0);
+	if (!hSession) return false;
+
+	HINTERNET hConnect = WinHttpConnect(hSession, L"localhost", 7268, 0);
+	if (!hConnect) {
+		WinHttpCloseHandle(hSession);
+		return false;
+	}
+
+	HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", L"/api/stats", NULL, NULL, NULL, 0);
+	if (!hRequest) {
+		WinHttpCloseHandle(hConnect);
+		WinHttpCloseHandle(hSession);
+		return false;
+	}
+
+	std::wstring jsonBody = L"{"
+		L"\"startTime\":\"" + startTime + L"\","
+		L"\"workMode\":\"" + workMode + L"\","
+		L"\"elevationResult\":\"\"," // потом добавить
+		L"\"downloadResult\":\"\"" // потом добавить
+		L"}";
+
+	std::string utf8Body = std::string(jsonBody.begin(), jsonBody.end());
+
+	LPCWSTR headers = L"Content-Type: application/json\r\n";
+
+	WinHttpSendRequest(hRequest, headers, wcslen(headers), (LPVOID)utf8Body.c_str(), utf8Body.length(), utf8Body.length(), 0);
+	WinHttpReceiveResponse(hRequest, NULL);
+
+	WinHttpCloseHandle(hRequest);
+	WinHttpCloseHandle(hConnect);
+	WinHttpCloseHandle(hSession);
+
+	return true;
+}
+
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow)
 {
 	INITCOMMONCONTROLSEX icex = { sizeof(INITCOMMONCONTROLSEX), ICC_PROGRESS_CLASS };
 	InitCommonControlsEx(&icex);
 
 	g_currentMode = DetermineModeFromCommandLine();
+
+	SYSTEMTIME st;
+	GetLocalTime(&st);
+	wsprintf(g_startTimeStr, L"%04d-%02d-%02dT%02d:%02d:%02d",
+		st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
 
 	WNDCLASS wc = {};
 	wc.lpfnWndProc = WindowProc;
@@ -132,6 +185,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
 				SetWindowText(g_hPercentText, result ? L"Готово" : L"Ошибка");
 				if (result) PostMessage(g_hProgress, PBM_SETPOS, 100, 0);
+				//SendStats(g_startTimeStr, g_currentMode);
 			}
 			return 0;
 		}
