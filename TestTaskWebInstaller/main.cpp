@@ -59,7 +59,7 @@ bool DownloadFileWininet(const char* url, const char* outputFile) {
 	DWORD bytesWritten;
 	int totalBytesRead = 0;
 
-	SendMessage(g_hProgress, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
+	PostMessage(g_hProgress, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
 
 	while (InternetReadFile(hUrl, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0) {
 		WriteFile(hFile, buffer, bytesRead, &bytesWritten, NULL);
@@ -67,7 +67,7 @@ bool DownloadFileWininet(const char* url, const char* outputFile) {
 
 		if (totalSize > 0) {
 			int percent = (totalBytesRead * 100) / totalSize;
-			SendMessage(g_hProgress, PBM_SETPOS, percent, 0);
+			PostMessage(g_hProgress, PBM_SETPOS, percent, 0);
 
 			wchar_t percentText[50];
 			wsprintf(percentText, L"%d%%", percent);
@@ -124,14 +124,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		case WM_COMMAND: {
 			if (LOWORD(wParam) == ID_BUTTON_START) {
 				SetWindowText(g_hPercentText, L"0%");
-				SendMessage(g_hProgress, PBM_SETPOS, 0, 0);
+				PostMessage(g_hProgress, PBM_SETPOS, 0, 0);
 
 				bool result = (g_currentMode == L"Режим curl") ? 
 					DownloadFileCurl() :
 					DownloadFileWininet("https://www.7-zip.org/a/7z2600-x64.exe", "7-Zip.exe");
 
 				SetWindowText(g_hPercentText, result ? L"Готово" : L"Ошибка");
-				if (result) SendMessage(g_hProgress, PBM_SETPOS, 100, 0);
+				if (result) PostMessage(g_hProgress, PBM_SETPOS, 100, 0);
 			}
 			return 0;
 		}
