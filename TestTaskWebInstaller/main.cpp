@@ -1,9 +1,11 @@
 #include <windows.h>
 #include <commctrl.h>
 #include <wininet.h>
-#include <string>
 #include <winhttp.h> 
+#include <fstream>  
+#include <curl/curl.h>
 
+#pragma comment(lib, "libcurl_imp.lib")
 #pragma comment(lib, "wininet.lib")
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "winhttp.lib")
@@ -29,8 +31,61 @@ std::wstring DetermineModeFromCommandLine()
 	return L"Режим по умолчанию";
 }
 
+size_t WriteDataCallback(void* ptr, size_t size, size_t nmemb, FILE* stream) {
+	size_t written = fwrite(ptr, size, nmemb, (FILE*)stream);
+	return written;
+}
+
+int ProgressCallback(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow) {
+	if (dltotal > 1024) { 
+		int percent = (int)((dlnow * 100) / dltotal);
+
+		if (percent >= 0 && percent <= 100) {
+			SendMessage(g_hProgress, PBM_SETPOS, percent, 0);
+
+			wchar_t percentText[50];
+			wsprintf(percentText, L"%d%%", percent);
+			SetWindowText(g_hPercentText, percentText);
+		}
+
+		MSG msg;
+		while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
+	}
+	return 0;
+}
+
 bool DownloadFileCurl() {
-	return false; // Заглушка для режима curl, реализацию можно добавить позже
+	CURL* curl = curl_easy_init();
+	if (!curl) return false;
+
+	FILE* fp = nullptr;
+	errno_t err = fopen_s(&fp, "7-Zip.exe", "wb");
+	if (err != 0 || fp == nullptr) {
+		curl_easy_cleanup(curl);
+		return false;
+	}
+
+	curl_easy_setopt(curl, CURLOPT_URL, "https://www.7-zip.org/a/7z2600-x64.exe");
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteDataCallback);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
+	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); 
+
+	curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, ProgressCallback);
+	curl_easy_setopt(curl, CURLOPT_XFERINFODATA, NULL);
+	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+
+	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30L);
+	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 300L);
+
+	CURLcode res = curl_easy_perform(curl);
+
+	fclose(fp);
+	curl_easy_cleanup(curl);
+
+	return (res == CURLE_OK);
 }
 
 bool DownloadFileWininet(const char* url, const char* outputFile) {
@@ -165,35 +220,35 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
-		case WM_CREATE: {
-			std::wstring modeText = L"Режим: " + g_currentMode;
-			CreateWindow(L"STATIC", modeText.c_str(), WS_CHILD | WS_VISIBLE, 150, 30, 300, 25, hwnd, nullptr, nullptr, nullptr);
-			g_hPercentText = CreateWindow(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 50, 70, 100, 30, hwnd, nullptr, nullptr, nullptr);
-			g_hProgress = CreateWindow(PROGRESS_CLASS, nullptr, WS_CHILD | WS_VISIBLE, 50, 100, 400, 30, hwnd, nullptr, nullptr, nullptr);
-			CreateWindow(L"BUTTON", L"Скачать", WS_CHILD | WS_VISIBLE, 200, 150, 100, 25, hwnd, (HMENU)ID_BUTTON_START, nullptr, nullptr);
-			return 0;
+	case WM_CREATE: {
+		std::wstring modeText = L"Режим: " + g_currentMode;
+		CreateWindow(L"STATIC", modeText.c_str(), WS_CHILD | WS_VISIBLE, 150, 30, 300, 25, hwnd, nullptr, nullptr, nullptr);
+		g_hPercentText = CreateWindow(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 50, 70, 100, 30, hwnd, nullptr, nullptr, nullptr);
+		g_hProgress = CreateWindow(PROGRESS_CLASS, nullptr, WS_CHILD | WS_VISIBLE, 50, 100, 400, 30, hwnd, nullptr, nullptr, nullptr);
+		CreateWindow(L"BUTTON", L"Скачать", WS_CHILD | WS_VISIBLE, 200, 150, 100, 25, hwnd, (HMENU)ID_BUTTON_START, nullptr, nullptr);
+		return 0;
+	}
+
+	case WM_COMMAND: {
+		if (LOWORD(wParam) == ID_BUTTON_START) {
+			SetWindowText(g_hPercentText, L"0%");
+			PostMessage(g_hProgress, PBM_SETPOS, 0, 0);
+
+			bool result = (g_currentMode == L"Режим curl") ?
+				DownloadFileCurl() :
+				DownloadFileWininet("https://www.7-zip.org/a/7z2600-x64.exe", "7-Zip.exe");
+
+			SetWindowText(g_hPercentText, result ? L"Готово" : L"Ошибка");
+			if (result) PostMessage(g_hProgress, PBM_SETPOS, 100, 0);
+			//SendStats(g_startTimeStr, g_currentMode);
 		}
+		return 0;
+	}
 
-		case WM_COMMAND: {
-			if (LOWORD(wParam) == ID_BUTTON_START) {
-				SetWindowText(g_hPercentText, L"0%");
-				PostMessage(g_hProgress, PBM_SETPOS, 0, 0);
-
-				bool result = (g_currentMode == L"Режим curl") ? 
-					DownloadFileCurl() :
-					DownloadFileWininet("https://www.7-zip.org/a/7z2600-x64.exe", "7-Zip.exe");
-
-				SetWindowText(g_hPercentText, result ? L"Готово" : L"Ошибка");
-				if (result) PostMessage(g_hProgress, PBM_SETPOS, 100, 0);
-				//SendStats(g_startTimeStr, g_currentMode);
-			}
-			return 0;
-		}
-
-		case WM_DESTROY: {
-			PostQuitMessage(0);
-			return 0;
-		}
+	case WM_DESTROY: {
+		PostQuitMessage(0);
+		return 0;
+	}
 	}
 	return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
