@@ -4,18 +4,26 @@
 #include <winhttp.h> 
 #include <fstream>  
 #include <curl/curl.h>
+#include <shlobj.h> 
 
 #pragma comment(lib, "libcurl_imp.lib")
 #pragma comment(lib, "wininet.lib")
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "winhttp.lib")
+#pragma comment(lib, "shell32.lib") 
 
 #define ID_BUTTON_START 1001
+#define ID_EDIT_FOLDER 1002 
+#define ID_BUTTON_BROWSE 1003 
+#define ID_RADIO_32 1004
+#define ID_RADIO_64 1005
 
 HWND g_hProgress = nullptr;
 HWND g_hPercentText = nullptr;
+HWND g_hFolderEdit = nullptr;
 std::wstring g_currentMode = L"";
 wchar_t g_startTimeStr[50];
+static HBRUSH g_hWhiteBrush = NULL;
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
@@ -57,21 +65,27 @@ int ProgressCallback(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_o
 	return 0;
 }
 
-bool DownloadFileCurl() {
+bool DownloadFileCurl(const char* url) {
 	CURL* curl = curl_easy_init();
 	if (!curl) return false;
 
+	wchar_t folderPath[MAX_PATH];
+	GetWindowText(g_hFolderEdit, folderPath, MAX_PATH);
+
+	wchar_t filePath[MAX_PATH];
+	wsprintf(filePath, L"%s\\7-Zip.exe", folderPath);
+
 	FILE* fp = nullptr;
-	errno_t err = fopen_s(&fp, "7-Zip.exe", "wb");
+	errno_t err = _wfopen_s(&fp, filePath, L"wb");
 	if (err != 0 || fp == nullptr) {
 		curl_easy_cleanup(curl);
 		return false;
 	}
 
-	curl_easy_setopt(curl, CURLOPT_URL, "https://www.7-zip.org/a/7z2600-x64.exe");
+	curl_easy_setopt(curl, CURLOPT_URL, url);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteDataCallback);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
-	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); 
+	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
 	curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, ProgressCallback);
 	curl_easy_setopt(curl, CURLOPT_XFERINFODATA, NULL);
@@ -205,7 +219,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	RegisterClass(&wc);
 
 	HWND hwnd = CreateWindowEx(0, L"MainClass", L"Загрузчик", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-		CW_USEDEFAULT, CW_USEDEFAULT, 500, 300, nullptr, nullptr, hInst, nullptr);
+		CW_USEDEFAULT, CW_USEDEFAULT, 500, 350, nullptr, nullptr, hInst, nullptr);
 
 	ShowWindow(hwnd, nCmdShow);
 	UpdateWindow(hwnd);
@@ -218,15 +232,63 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	return 0;
 }
 
+std::wstring BrowseForFolder(HWND hwnd) {
+	BROWSEINFOW bi = { 0 };
+	bi.hwndOwner = hwnd;
+	bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
+
+	LPITEMIDLIST pidl = SHBrowseForFolderW(&bi);
+	if (pidl != 0) {
+		wchar_t path[MAX_PATH];
+		if (SHGetPathFromIDListW(pidl, path)) {
+			IMalloc* imalloc = 0;
+			if (SUCCEEDED(SHGetMalloc(&imalloc))) {
+				imalloc->Free(pidl);
+				imalloc->Release();
+			}
+			return std::wstring(path);
+		}
+	}
+	return L"";
+}
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
 	case WM_CREATE: {
+		g_hWhiteBrush = CreateSolidBrush(RGB(255, 255, 255));
+
 		std::wstring modeText = L"Режим: " + g_currentMode;
 		CreateWindow(L"STATIC", modeText.c_str(), WS_CHILD | WS_VISIBLE, 150, 30, 300, 25, hwnd, nullptr, nullptr, nullptr);
-		g_hPercentText = CreateWindow(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 50, 70, 100, 30, hwnd, nullptr, nullptr, nullptr);
-		g_hProgress = CreateWindow(PROGRESS_CLASS, nullptr, WS_CHILD | WS_VISIBLE, 50, 100, 400, 30, hwnd, nullptr, nullptr, nullptr);
-		CreateWindow(L"BUTTON", L"Скачать", WS_CHILD | WS_VISIBLE, 200, 150, 100, 25, hwnd, (HMENU)ID_BUTTON_START, nullptr, nullptr);
+		
+		CreateWindow(L"STATIC", L"Папка для сохранения:", WS_CHILD | WS_VISIBLE, 50, 60, 400, 20, hwnd, nullptr, nullptr, nullptr);
+		g_hFolderEdit = CreateWindow(L"EDIT", L"C:\\", WS_CHILD | WS_VISIBLE | WS_BORDER, 50, 85, 300, 25, hwnd, (HMENU)ID_EDIT_FOLDER, nullptr, nullptr);
+		CreateWindow(L"BUTTON", L"Обзор", WS_CHILD | WS_VISIBLE, 360, 85, 80, 25, hwnd, (HMENU)ID_BUTTON_BROWSE, nullptr, nullptr);
+		
+		CreateWindow(L"BUTTON", L"32-bit", WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON, 50, 120, 80, 25, hwnd, (HMENU)ID_RADIO_32, nullptr, nullptr);
+		CreateWindow(L"BUTTON", L"64-bit", WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON, 50, 145, 80, 25, hwnd, (HMENU)ID_RADIO_64, nullptr, nullptr);
+		CheckRadioButton(hwnd, ID_RADIO_32, ID_RADIO_64, ID_RADIO_64);
+
+		g_hPercentText = CreateWindow(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 50, 170, 100, 30, hwnd, nullptr, nullptr, nullptr);
+		g_hProgress = CreateWindow(PROGRESS_CLASS, nullptr, WS_CHILD | WS_VISIBLE, 50, 200, 400, 30, hwnd, nullptr, nullptr, nullptr);
+		CreateWindow(L"BUTTON", L"Скачать", WS_CHILD | WS_VISIBLE, 200, 250, 100, 25, hwnd, (HMENU)ID_BUTTON_START, nullptr, nullptr);
 		return 0;
+	}
+
+	case WM_ERASEBKGND:
+	{
+		HDC hdc = (HDC)wParam;
+		RECT rect;
+		GetClientRect(hwnd, &rect);
+		FillRect(hdc, &rect, g_hWhiteBrush);
+		return 1; 
+	}
+
+	case WM_CTLCOLORSTATIC:
+	{
+		HDC hdcStatic = (HDC)wParam;
+		SetBkColor(hdcStatic, RGB(255, 255, 255));  
+		SetTextColor(hdcStatic, RGB(0, 0, 0));      
+		return (LRESULT)g_hWhiteBrush;              
 	}
 
 	case WM_COMMAND: {
@@ -234,18 +296,50 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			SetWindowText(g_hPercentText, L"0%");
 			PostMessage(g_hProgress, PBM_SETPOS, 0, 0);
 
-			bool result = (g_currentMode == L"Режим curl") ?
-				DownloadFileCurl() :
-				DownloadFileWininet("https://www.7-zip.org/a/7z2600-x64.exe", "7-Zip.exe");
+			const char* url;
+			if (IsDlgButtonChecked(hwnd, ID_RADIO_32) == BST_CHECKED) {
+				url = "https://www.7-zip.org/a/7z2600.exe";
+			}
+			else {
+				url = "https://www.7-zip.org/a/7z2600-x64.exe";
+			}
+
+			bool result;
+			if (g_currentMode == L"Режим curl") {
+				result = DownloadFileCurl(url);  
+			}
+			else {
+				wchar_t folderPath[MAX_PATH];
+				GetWindowText(g_hFolderEdit, folderPath, MAX_PATH);
+				wchar_t filePath[MAX_PATH];
+				wsprintf(filePath, L"%s\\7-Zip.exe", folderPath);
+
+				char filePathA[MAX_PATH];
+				WideCharToMultiByte(CP_ACP, 0, filePath, -1, filePathA, MAX_PATH, NULL, NULL);
+
+				result = DownloadFileWininet(url, filePathA);
+			}
 
 			SetWindowText(g_hPercentText, result ? L"Готово" : L"Ошибка");
 			if (result) PostMessage(g_hProgress, PBM_SETPOS, 100, 0);
-			//SendStats(g_startTimeStr, g_currentMode);
+			SendStats(g_startTimeStr, g_currentMode);
+		}
+		else if (LOWORD(wParam) == ID_BUTTON_BROWSE) {
+			std::wstring folder = BrowseForFolder(hwnd);
+			if (!folder.empty()) {
+				SetWindowText(g_hFolderEdit, folder.c_str());
+			}
+		}
+		else if (LOWORD(wParam) == ID_RADIO_32 || LOWORD(wParam) == ID_RADIO_64) { 
+			CheckRadioButton(hwnd, ID_RADIO_32, ID_RADIO_64, LOWORD(wParam));
 		}
 		return 0;
 	}
 
 	case WM_DESTROY: {
+		if (g_hWhiteBrush) {
+			DeleteObject(g_hWhiteBrush);
+		}
 		PostQuitMessage(0);
 		return 0;
 	}
