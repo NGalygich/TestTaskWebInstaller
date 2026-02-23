@@ -42,7 +42,7 @@ void CreateUI(HWND hwnd) {
 	CreateWindowW(L"BUTTON", L"64-bit", WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON, 50, 145, 80, 25, hwnd, (HMENU)ID_RADIO_64, nullptr, nullptr);
 	CheckRadioButton(hwnd, ID_RADIO_32, ID_RADIO_64, ID_RADIO_64);
 
-	g_hPercentText = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 50, 170, 100, 30, hwnd, nullptr, nullptr, nullptr);
+	g_hPercentText = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 50, 170, 400, 30, hwnd, nullptr, nullptr, nullptr);
 	g_hProgress = CreateWindowW(PROGRESS_CLASS, nullptr, WS_CHILD | WS_VISIBLE, 50, 200, 400, 30, hwnd, nullptr, nullptr, nullptr);
 	CreateWindowW(L"BUTTON", L"Скачать", WS_CHILD | WS_VISIBLE, 200, 250, 100, 25, hwnd, (HMENU)ID_BUTTON_START, nullptr, nullptr);
 }

@@ -119,8 +119,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			}
 
 			SetWindowText(g_hPercentText, result ? L"Готово" : L"Ошибка");
-			if (result) SendMessage(g_hProgress, PBM_SETPOS, 100, 0);
-			SendStats(g_startTimeStr, g_currentMode);
+
+			if (result) {
+				SendMessage(g_hProgress, PBM_SETPOS, 100, 0);
+				SetWindowText(g_hPercentText, L"Начинаю отправку статистики...");
+				SendStats(g_startTimeStr, g_currentMode);
+				SetWindowText(g_hPercentText, L"Готово");
+			}
 		}
 		else if (LOWORD(wParam) == ID_BUTTON_BROWSE) {
 			std::wstring folder = BrowseForFolder(hwnd);
