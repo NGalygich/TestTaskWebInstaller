@@ -8,6 +8,7 @@
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "shell32.lib") 
 
+
 HWND g_hProgress = nullptr;
 HWND g_hPercentText = nullptr;
 HWND g_hFolderEdit = nullptr;
