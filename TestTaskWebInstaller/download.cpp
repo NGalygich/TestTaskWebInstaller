@@ -1,3 +1,5 @@
+#define CURL_STATICLIB
+
 #include <windows.h>
 #include <commctrl.h>
 #include <wininet.h>
