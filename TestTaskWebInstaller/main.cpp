@@ -4,17 +4,17 @@
 #include "ui.h"
 #include "download.h"
 #include "stats.h"
+#include <shellapi.h>
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "shell32.lib") 
 
-
 HWND g_hProgress = nullptr;
 HWND g_hPercentText = nullptr;
 HWND g_hFolderEdit = nullptr;
-std::wstring g_currentMode = L"";
+std::wstring g_currentMode;
 wchar_t g_startTimeStr[50];
-static HBRUSH g_hWhiteBrush = NULL;
+static HBRUSH g_hWhiteBrush = nullptr;
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
@@ -23,14 +23,14 @@ std::wstring DetermineModeFromCommandLine()
 	LPWSTR cmdLine = GetCommandLine();
 
 	if (wcsstr(cmdLine, L"-wininet"))
-		return L"Режим wininet";
+		return L"wininet";
 	if (wcsstr(cmdLine, L"-curl"))
-		return L"Режим curl";
+		return L"curl";
 
-	return L"Режим по умолчанию";
+	return L"wininet";
 }
 
-int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow)
+int WINAPI WinMain(HINSTANCE hInst, HINSTANCE /*hPrevInst*/, LPSTR /*lpCmdLine*/, int nCmdShow)
 {
 	INITCOMMONCONTROLSEX icex = { sizeof(INITCOMMONCONTROLSEX), ICC_PROGRESS_CLASS };
 	InitCommonControlsEx(&icex);
@@ -50,7 +50,8 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
 	RegisterClass(&wc);
 
-	HWND hwnd = CreateWindowEx(0, L"MainClass", L"Загрузчик", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+	HWND hwnd = CreateWindowEx(0, L"MainClass", L"Загрузчик",
+		WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
 		CW_USEDEFAULT, CW_USEDEFAULT, 500, 350, nullptr, nullptr, hInst, nullptr);
 
 	ShowWindow(hwnd, nCmdShow);
@@ -64,9 +65,12 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	return 0;
 }
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-	switch (uMsg) {
-	case WM_CREATE: {
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	switch (uMsg)
+	{
+	case WM_CREATE:
+	{
 		g_hWhiteBrush = CreateSolidBrush(RGB(255, 255, 255));
 		CreateUI(hwnd);
 		return 0;
@@ -89,24 +93,31 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		return (LRESULT)g_hWhiteBrush;
 	}
 
-	case WM_COMMAND: {
-		if (LOWORD(wParam) == ID_BUTTON_START) {
+	case WM_COMMAND:
+	{
+		if (LOWORD(wParam) == ID_BUTTON_START)
+		{
+			ShowWindow(g_hProgress, SW_SHOW);
+			ShowWindow(g_hPercentText, SW_SHOW);
+
 			SetWindowText(g_hPercentText, L"0%");
 			SendMessage(g_hProgress, PBM_SETPOS, 0, 0);
 
-			const char* url;
-			if (IsDlgButtonChecked(hwnd, ID_RADIO_32) == BST_CHECKED) {
-				url = "https://www.7-zip.org/a/7z2600.exe";
-			}
-			else {
-				url = "https://www.7-zip.org/a/7z2600-x64.exe";
-			}
+			const char* url = IsDlgButtonChecked(hwnd, ID_RADIO_32) == BST_CHECKED
+				? "https://www.7-zip.org/a/7z2600.exe"
+				: "https://www.7-zip.org/a/7z2600-x64.exe";
 
-			bool result;
-			if (g_currentMode == L"Режим curl") {
-				result = DownloadFileCurl(url);
+			std::wstring downloadResult;
+			std::wstring downloadError;
+			std::wstring elevationResult;
+			bool downloadSuccess;
+
+			if (g_currentMode == L"curl")
+			{
+				downloadSuccess = DownloadFileCurl(url);
 			}
-			else {
+			else
+			{
 				wchar_t folderPath[MAX_PATH];
 				GetWindowText(g_hFolderEdit, folderPath, MAX_PATH);
 				wchar_t filePath[MAX_PATH];
@@ -114,29 +125,91 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
 				char filePathA[MAX_PATH];
 				WideCharToMultiByte(CP_ACP, 0, filePath, -1, filePathA, MAX_PATH, NULL, NULL);
-
-				result = DownloadFileWininet(url, filePathA);
+				downloadSuccess = DownloadFileWininet(url, filePathA);
 			}
 
-			SetWindowText(g_hPercentText, result ? L"Готово" : L"Ошибка");
-			if (result) SendMessage(g_hProgress, PBM_SETPOS, 100, 0);
-			SendStats(g_startTimeStr, g_currentMode);
+			if (downloadSuccess)
+			{
+				SendMessage(g_hProgress, PBM_SETPOS, 100, 0);
+				SetWindowText(g_hPercentText, L"Файл скачен. Запускаю...");
+
+				wchar_t folderPath[MAX_PATH];
+				GetWindowText(g_hFolderEdit, folderPath, MAX_PATH);
+				wchar_t filePath[MAX_PATH];
+				wsprintf(filePath, L"%s\\7-Zip.exe", folderPath);
+
+				SHELLEXECUTEINFO sei = { sizeof(sei) };
+				sei.lpVerb = L"runas";
+				sei.lpFile = filePath;
+				sei.nShow = SW_SHOWNORMAL;
+				sei.fMask = SEE_MASK_DEFAULT;
+
+				if (ShellExecuteEx(&sei))
+				{
+					elevationResult = L"разрешена";
+				}
+				else
+				{
+					DWORD error = GetLastError();
+					if (error == ERROR_CANCELLED)
+					{
+						elevationResult = L"отклонена";
+						ShellExecute(NULL, L"open", filePath, NULL, NULL, SW_SHOWNORMAL);
+					}
+					else
+					{
+						elevationResult = L"ошибка";
+					}
+				}
+
+				downloadResult = L"true";
+				downloadError = L"";
+				SetWindowText(g_hPercentText, L"Начинаю отправку статистики...");
+			}
+			else
+			{
+				SetWindowText(g_hPercentText, L"Ошибка. Файл не скачен. Отправляю статистику...");
+				downloadResult = L"false";
+				downloadError = L"Ошибка при скачивании файла";
+				elevationResult = L"";
+			}
+
+			bool statsSent = SendStats(g_startTimeStr, g_currentMode, elevationResult, downloadResult, downloadError);
+
+			if (downloadSuccess)
+			{
+				SetWindowText(g_hPercentText, statsSent
+					? L"Готово. Файл скачен. Статистика отправлена."
+					: L"Файл скачен. Ошибка отправки статистики");
+			}
+			else
+			{
+				SetWindowText(g_hPercentText, statsSent
+					? L"Файл не скачен. Статистика отправлена."
+					: L"Файл не скачен. Ошибка отправки статистики");
+			}
 		}
-		else if (LOWORD(wParam) == ID_BUTTON_BROWSE) {
+		else if (LOWORD(wParam) == ID_BUTTON_BROWSE)
+		{
 			std::wstring folder = BrowseForFolder(hwnd);
-			if (!folder.empty()) {
+			if (!folder.empty())
+			{
 				SetWindowText(g_hFolderEdit, folder.c_str());
 			}
 		}
-		else if (LOWORD(wParam) == ID_RADIO_32 || LOWORD(wParam) == ID_RADIO_64) {
+		else if (LOWORD(wParam) == ID_RADIO_32 || LOWORD(wParam) == ID_RADIO_64)
+		{
 			CheckRadioButton(hwnd, ID_RADIO_32, ID_RADIO_64, LOWORD(wParam));
 		}
 		return 0;
 	}
 
-	case WM_DESTROY: {
-		if (g_hWhiteBrush) {
+	case WM_DESTROY:
+	{
+		if (g_hWhiteBrush)
+		{
 			DeleteObject(g_hWhiteBrush);
+			g_hWhiteBrush = nullptr;
 		}
 		PostQuitMessage(0);
 		return 0;

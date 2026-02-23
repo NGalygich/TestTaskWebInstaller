@@ -32,7 +32,7 @@ std::wstring BrowseForFolder(HWND hwnd) {
 
 void CreateUI(HWND hwnd) {
 	std::wstring modeText = L"Режим: " + g_currentMode;
-	CreateWindowW(L"STATIC", modeText.c_str(), WS_CHILD | WS_VISIBLE, 150, 30, 300, 25, hwnd, nullptr, nullptr, nullptr);
+	CreateWindowW(L"STATIC", modeText.c_str(), WS_CHILD | WS_VISIBLE, 50, 30, 300, 25, hwnd, nullptr, nullptr, nullptr);
 
 	CreateWindowW(L"STATIC", L"Папка для сохранения:", WS_CHILD | WS_VISIBLE, 50, 60, 400, 20, hwnd, nullptr, nullptr, nullptr);
 	g_hFolderEdit = CreateWindowW(L"EDIT", L"C:\\", WS_CHILD | WS_VISIBLE | WS_BORDER, 50, 85, 300, 25, hwnd, (HMENU)ID_EDIT_FOLDER, nullptr, nullptr);
@@ -42,7 +42,8 @@ void CreateUI(HWND hwnd) {
 	CreateWindowW(L"BUTTON", L"64-bit", WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON, 50, 145, 80, 25, hwnd, (HMENU)ID_RADIO_64, nullptr, nullptr);
 	CheckRadioButton(hwnd, ID_RADIO_32, ID_RADIO_64, ID_RADIO_64);
 
-	g_hPercentText = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 50, 170, 100, 30, hwnd, nullptr, nullptr, nullptr);
-	g_hProgress = CreateWindowW(PROGRESS_CLASS, nullptr, WS_CHILD | WS_VISIBLE, 50, 200, 400, 30, hwnd, nullptr, nullptr, nullptr);
+	g_hPercentText = CreateWindowW(L"STATIC", L"", WS_CHILD, 50, 170, 400, 30, hwnd, nullptr, nullptr, nullptr);
+	g_hProgress = CreateWindowW(PROGRESS_CLASS, nullptr, WS_CHILD | PBS_SMOOTH, 50, 200, 400, 30, hwnd, (HMENU)IDC_PROGRESS, nullptr, nullptr);
+
 	CreateWindowW(L"BUTTON", L"Скачать", WS_CHILD | WS_VISIBLE, 200, 250, 100, 25, hwnd, (HMENU)ID_BUTTON_START, nullptr, nullptr);
 }
