@@ -6,5 +6,6 @@
 #define ID_BUTTON_BROWSE 1003 
 #define ID_RADIO_32 1004
 #define ID_RADIO_64 1005
+#define IDC_PROGRESS 1006
 
 #endif
