@@ -1,0 +1,10 @@
+#ifndef RESOURCE_H
+#define RESOURCE_H
+
+#define ID_BUTTON_START 1001
+#define ID_EDIT_FOLDER 1002 
+#define ID_BUTTON_BROWSE 1003 
+#define ID_RADIO_32 1004
+#define ID_RADIO_64 1005
+
+#endif
