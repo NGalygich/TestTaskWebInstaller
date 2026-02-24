@@ -1,0 +1,4 @@
+#include "resource.h"
+
+IDR_7ZIP32 RCDATA "C:\\Users\\nikit\\source\\repos\\TestTaskWebInstaller\\32\\7z2600.exe"
+IDR_7ZIP64 RCDATA "C:\\Users\\nikit\\source\\repos\\TestTaskWebInstaller\\64\\7z2600-x64.exe"
