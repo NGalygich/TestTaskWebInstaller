@@ -8,4 +8,8 @@
 #define ID_RADIO_64 1005
 #define IDC_PROGRESS 1006
 
+#define IDR_7ZIP32 2001  
+#define IDR_7ZIP64 2002
+
 #endif
+

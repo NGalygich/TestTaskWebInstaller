@@ -19,4 +19,7 @@ int ProgressCallback(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_o
 bool DownloadFileCurl(const char* url);
 bool DownloadFileWininet(const char* url, const char* outputFile);
 
+bool ExtractResourceToFile(int resourceId, const wchar_t* filePath);
+bool CheckAndExtractFromResource(const wchar_t* filePath, bool is64bit);
+
 #endif

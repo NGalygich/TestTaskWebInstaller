@@ -7,4 +7,4 @@
 
 bool SendStats(const std::wstring& startTime, const std::wstring& workMode,
     const std::wstring& elevationResult, const std::wstring& downloadResult,
-    const std::wstring& downloadError);
+    const std::wstring& downloadError, const std::wstring& launchResult);

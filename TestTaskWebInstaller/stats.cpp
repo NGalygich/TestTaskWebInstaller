@@ -5,7 +5,7 @@
 
 bool SendStats(const std::wstring& startTime, const std::wstring& workMode,
     const std::wstring& elevationResult, const std::wstring& downloadResult,
-    const std::wstring& downloadError) {
+    const std::wstring& downloadError, const std::wstring& launchResult) {
 
     HINTERNET hSession = WinHttpOpen(L"Simple Client",
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
@@ -34,13 +34,16 @@ bool SendStats(const std::wstring& startTime, const std::wstring& workMode,
         return false;
     }
 
+    std::wstring downloadResultBool = (downloadResult == L"true") ? L"true" : L"false";
+    std::wstring launchResultBool = (launchResult == L"true") ? L"true" : L"false";
+
     std::wstring jsonBody = L"{";
     jsonBody += L"\"startTime\":\"" + startTime + L"\",";
     jsonBody += L"\"workMode\":\"" + workMode + L"\",";
     jsonBody += L"\"elevationResult\":\"" + elevationResult + L"\",";
-    jsonBody += L"\"downloadResult\":\"" + downloadResult + L"\","; //результат скачивания
-    jsonBody += L"\"downloadError\":\"" + downloadError + L"\","; //ошибка скачивания
-    jsonBody += L"\"launchResult\":\"\"";
+    jsonBody += L"\"downloadResult\":" + downloadResultBool + L",";
+    jsonBody += L"\"downloadError\":\"" + downloadError + L"\",";
+    jsonBody += L"\"launchResult\":" + launchResultBool;
     jsonBody += L"}";
 
     int utf8Size = WideCharToMultiByte(CP_UTF8, 0, jsonBody.c_str(), -1, NULL, 0, NULL, NULL);
