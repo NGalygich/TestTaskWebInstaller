@@ -57,7 +57,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE /*hPrevInst*/, LPSTR /*lpCmdLine*/
 
 	HWND hwnd = CreateWindowEx(0, L"MainClass", L"Загрузчик",
 		WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-		CW_USEDEFAULT, CW_USEDEFAULT, 500, 350, nullptr, nullptr, hInst, nullptr);
+		CW_USEDEFAULT, CW_USEDEFAULT, 550, 350, nullptr, nullptr, hInst, nullptr);
 
 	ShowWindow(hwnd, nCmdShow);
 	UpdateWindow(hwnd);
@@ -154,9 +154,17 @@ DWORD WINAPI DownloadThreadProc(LPVOID lpParam) {
     HWND hwnd = (HWND)lpParam;
 
     bool is64bit = IsDlgButtonChecked(hwnd, ID_RADIO_64) == BST_CHECKED;
+
+    // скачивание с тетового сервера
     const char* url = is64bit
         ? "http://localhost:7268/download/7zip/64"
         : "http://localhost:7268/download/7zip/32";
+
+    // если нужно скачать с оф. сайта 7-zip - заменить на этот вариант.
+    //const char* url = is64bit
+    //    ? "https://www.7-zip.org/a/7z2600-x64.exe"
+    //    : "https://www.7-zip.org/a/7z2600.exe";
+
 
     std::wstring downloadResult;
     std::wstring downloadError;
@@ -173,6 +181,21 @@ DWORD WINAPI DownloadThreadProc(LPVOID lpParam) {
 
     PostMessage(hwnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Подключение к серверу...");
 
+    if (DeleteFile(filePath))
+    {
+        PostMessage(hwnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Старый файл удален");
+    }
+    else
+    {
+        DWORD error = GetLastError();
+        if (error != ERROR_FILE_NOT_FOUND)
+        {
+            PostMessage(hwnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Не удалось удалить старый файл");
+        }
+    }
+
+    PostMessage(hwnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Подключение к серверу...");
+
     if (g_currentMode == L"curl")
     {
         downloadSuccess = DownloadFileCurl(url);
@@ -182,6 +205,25 @@ DWORD WINAPI DownloadThreadProc(LPVOID lpParam) {
         char filePathA[MAX_PATH];
         WideCharToMultiByte(CP_ACP, 0, filePath, -1, filePathA, MAX_PATH, NULL, NULL);
         downloadSuccess = DownloadFileWininet(url, filePathA);
+    }
+
+    if (!downloadSuccess)
+    {
+        PostMessage(hwnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Ошибка сети. Повторная попытка через 2 секунды...");
+        Sleep(2000); 
+
+        PostMessage(hwnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Повторная попытка...");
+
+        if (g_currentMode == L"curl")
+        {
+            downloadSuccess = DownloadFileCurl(url);
+        }
+        else
+        {
+            char filePathA[MAX_PATH];
+            WideCharToMultiByte(CP_ACP, 0, filePath, -1, filePathA, MAX_PATH, NULL, NULL);
+            downloadSuccess = DownloadFileWininet(url, filePathA);
+        }
     }
 
     if (!downloadSuccess)
@@ -240,7 +282,7 @@ DWORD WINAPI DownloadThreadProc(LPVOID lpParam) {
         }
     }
 
-    PostMessage(hwnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Отправляю статистику...");
+    PostMessage(hwnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Отправка статистики...");
     bool statsSent = SendStats(g_startTimeStr, g_currentMode, elevationResult, downloadResult, downloadError, launchResult);
 
     if (!statsSent)
