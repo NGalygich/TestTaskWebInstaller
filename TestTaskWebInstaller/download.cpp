@@ -1,4 +1,4 @@
-#define CURL_STATICLIB
+п»ї#define CURL_STATICLIB
 
 #include <windows.h>
 #include <commctrl.h>
@@ -39,84 +39,60 @@ int ProgressCallback(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_o
     return 0;
 }
 
+
 bool DownloadFileCurl(const char* url) {
+    static bool init = false;
+    if (!init) {
+        curl_global_init(CURL_GLOBAL_ALL);
+        init = true;
+    }
+
     CURL* curl = curl_easy_init();
     if (!curl) return false;
 
     wchar_t folderPath[MAX_PATH];
     GetWindowText(g_hFolderEdit, folderPath, MAX_PATH);
-
     wchar_t filePath[MAX_PATH];
     wsprintf(filePath, L"%s\\7-Zip.exe", folderPath);
 
-    CURLcode res;
-    long response_code = 0;
-
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
-
-    res = curl_easy_perform(curl);
-    if (res == CURLE_OK) {
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-        if (response_code != 200) {
-            curl_easy_cleanup(curl);           
-            HWND hMainWnd = GetParent(g_hProgress);
-            PostMessage(hMainWnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Файл не найден на сервере. Загружаю из ресурсов...");
-            return false;
-        }
-    }
-    else {
-        curl_easy_cleanup(curl);       
-        HWND hMainWnd = GetParent(g_hProgress);
-        PostMessage(hMainWnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Сервер не отвечает. Загружаю из ресурсов...");
-        return false;
-    }
-
-    curl_easy_reset(curl);
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-
     FILE* fp = nullptr;
-    errno_t err = _wfopen_s(&fp, filePath, L"wb");
-
-    if (err != 0 || fp == nullptr) {
+    if (_wfopen_s(&fp, filePath, L"wb") != 0 || !fp) {
         curl_easy_cleanup(curl);
         return false;
     }
 
+    curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteDataCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
 
-    curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, ProgressCallback);
-    curl_easy_setopt(curl, CURLOPT_XFERINFODATA, NULL);
-    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
-
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30L);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 300L);
-
-    res = curl_easy_perform(curl);
+    CURLcode res = curl_easy_perform(curl);
 
     fclose(fp);
     curl_easy_cleanup(curl);
 
-    FILE* checkFile = nullptr;
-    err = _wfopen_s(&checkFile, filePath, L"rb");
-    if (err == 0 && checkFile) {
-        fseek(checkFile, 0, SEEK_END);
-        long fileSize = ftell(checkFile);
-        fclose(checkFile);
-
-        if (fileSize == 0) {
-            _wremove(filePath);
-            return false;
-        }
-    }
-    else {
+    if (res != CURLE_OK) {
+        DeleteFileW(filePath);
         return false;
     }
 
-    return (res == CURLE_OK);
+    HANDLE hFile = CreateFileW(filePath, GENERIC_READ, FILE_SHARE_READ, NULL,
+        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    DWORD fileSize = GetFileSize(hFile, NULL);
+    CloseHandle(hFile);
+
+    if (fileSize < 1024) {
+        DeleteFileW(filePath);
+        return false;
+    }
+
+    return true;
 }
 
 bool DownloadFileWininet(const char* url, const char* outputFile) {
@@ -127,7 +103,7 @@ bool DownloadFileWininet(const char* url, const char* outputFile) {
     if (!hUrl) {
         InternetCloseHandle(hNet);        
         HWND hMainWnd = GetParent(g_hProgress);
-        PostMessage(hMainWnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Сервер не отвечает. Загружаю из ресурсов...");
+        PostMessage(hMainWnd, WM_UPDATE_STATUS, 0, (LPARAM)L"РЎРµСЂРІРµСЂ РЅРµ РѕС‚РІРµС‡Р°РµС‚. Р—Р°РіСЂСѓР¶Р°СЋ РёР· СЂРµСЃСѓСЂСЃРѕРІ...");
         return false;
     }
 
@@ -140,7 +116,7 @@ bool DownloadFileWininet(const char* url, const char* outputFile) {
         InternetCloseHandle(hUrl);
         InternetCloseHandle(hNet);       
         HWND hMainWnd = GetParent(g_hProgress);
-        PostMessage(hMainWnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Файл не найден на сервере. Загружаю из ресурсов...");
+        PostMessage(hMainWnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Р¤Р°Р№Р» РЅРµ РЅР°Р№РґРµРЅ РЅР° СЃРµСЂРІРµСЂРµ. Р—Р°РіСЂСѓР¶Р°СЋ РёР· СЂРµСЃСѓСЂСЃРѕРІ...");
         return false;
     }
 
@@ -196,13 +172,13 @@ bool DownloadFileWininet(const char* url, const char* outputFile) {
 bool ExtractResourceToFile(int resourceId, const wchar_t* filePath) {
     HRSRC hResource = FindResource(NULL, MAKEINTRESOURCE(resourceId), RT_RCDATA);
     if (!hResource) {
-        MessageBox(NULL, L"FindResource: ресурс не найден!", L"Ошибка", MB_OK);
+        MessageBox(NULL, L"FindResource: СЂРµСЃСѓСЂСЃ РЅРµ РЅР°Р№РґРµРЅ!", L"РћС€РёР±РєР°", MB_OK);
         return false;
     }
 
     HGLOBAL hLoadedResource = LoadResource(NULL, hResource);
     if (!hLoadedResource) {
-        MessageBox(NULL, L"LoadResource: не удалось загрузить!", L"Ошибка", MB_OK);
+        MessageBox(NULL, L"LoadResource: РЅРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ!", L"РћС€РёР±РєР°", MB_OK);
         return false;
     }
 
@@ -212,7 +188,7 @@ bool ExtractResourceToFile(int resourceId, const wchar_t* filePath) {
     FILE* fp = nullptr;
     errno_t err = _wfopen_s(&fp, filePath, L"wb");
     if (err != 0 || fp == nullptr) {
-        MessageBox(NULL, L"Не удалось создать файл!", L"Ошибка", MB_OK);
+        MessageBox(NULL, L"РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ С„Р°Р№Р»!", L"РћС€РёР±РєР°", MB_OK);
         return false;
     }
 
