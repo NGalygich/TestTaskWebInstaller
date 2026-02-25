@@ -8,34 +8,35 @@
 #include "download.h"
 #include "resource.h" 
 
+
+#ifndef WM_UPDATE_PROGRESS
+#define WM_UPDATE_PROGRESS (WM_USER + 1)
+#define WM_UPDATE_STATUS   (WM_USER + 2)
+#endif
+
 extern HWND g_hProgress;
 extern HWND g_hPercentText;
 extern HWND g_hFolderEdit;
 
 size_t WriteDataCallback(void* ptr, size_t size, size_t nmemb, FILE* stream) {
-	size_t written = fwrite(ptr, size, nmemb, (FILE*)stream);
-	return written;
+    size_t written = fwrite(ptr, size, nmemb, (FILE*)stream);
+    return written;
 }
 
 int ProgressCallback(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow) {
-	if (dltotal > 1024) {
-		int percent = (int)((dlnow * 100) / dltotal);
+    if (dltotal > 1024) {
+        int percent = (int)((dlnow * 100) / dltotal);
 
-		if (percent >= 0 && percent <= 100) {
-			SendMessage(g_hProgress, PBM_SETPOS, percent, 0);
+        if (percent >= 0 && percent <= 100) {        
+            HWND hMainWnd = GetParent(g_hProgress);
+            PostMessage(hMainWnd, WM_UPDATE_PROGRESS, percent, 0);
 
-			wchar_t percentText[50];
-			wsprintf(percentText, L"%d%%", percent);
-			SetWindowText(g_hPercentText, percentText);
-		}
-
-		MSG msg;
-		while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-		}
-	}
-	return 0;
+            wchar_t percentText[50];
+            wsprintf(percentText, L"%d%%", percent);
+            PostMessage(hMainWnd, WM_UPDATE_STATUS, 0, (LPARAM)percentText);
+        }
+    }
+    return 0;
 }
 
 bool DownloadFileCurl(const char* url) {
@@ -52,19 +53,23 @@ bool DownloadFileCurl(const char* url) {
     long response_code = 0;
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);  
+    curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
 
     res = curl_easy_perform(curl);
     if (res == CURLE_OK) {
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
         if (response_code != 200) {
-            curl_easy_cleanup(curl);
-            return false; 
+            curl_easy_cleanup(curl);           
+            HWND hMainWnd = GetParent(g_hProgress);
+            PostMessage(hMainWnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Файл не найден на сервере. Загружаю из ресурсов...");
+            return false;
         }
     }
     else {
-        curl_easy_cleanup(curl);
+        curl_easy_cleanup(curl);       
+        HWND hMainWnd = GetParent(g_hProgress);
+        PostMessage(hMainWnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Сервер не отвечает. Загружаю из ресурсов...");
         return false;
     }
 
@@ -103,12 +108,12 @@ bool DownloadFileCurl(const char* url) {
         fclose(checkFile);
 
         if (fileSize == 0) {
-            _wremove(filePath);  
+            _wremove(filePath);
             return false;
         }
     }
     else {
-        return false; 
+        return false;
     }
 
     return (res == CURLE_OK);
@@ -120,7 +125,9 @@ bool DownloadFileWininet(const char* url, const char* outputFile) {
 
     HINTERNET hUrl = InternetOpenUrlA(hNet, url, NULL, 0, 0, 0);
     if (!hUrl) {
-        InternetCloseHandle(hNet);
+        InternetCloseHandle(hNet);        
+        HWND hMainWnd = GetParent(g_hProgress);
+        PostMessage(hMainWnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Сервер не отвечает. Загружаю из ресурсов...");
         return false;
     }
 
@@ -131,8 +138,10 @@ bool DownloadFileWininet(const char* url, const char* outputFile) {
 
     if (statusCode != 200) {
         InternetCloseHandle(hUrl);
-        InternetCloseHandle(hNet);
-        return false; 
+        InternetCloseHandle(hNet);       
+        HWND hMainWnd = GetParent(g_hProgress);
+        PostMessage(hMainWnd, WM_UPDATE_STATUS, 0, (LPARAM)L"Файл не найден на сервере. Загружаю из ресурсов...");
+        return false;
     }
 
     char contentLength[32] = { 0 };
@@ -163,17 +172,12 @@ bool DownloadFileWininet(const char* url, const char* outputFile) {
         if (totalSize > 0) {
             int percent = (totalBytesRead * 100) / totalSize;
 
-            SendMessage(g_hProgress, PBM_SETPOS, percent, 0);
+            HWND hMainWnd = GetParent(g_hProgress);
+            PostMessage(hMainWnd, WM_UPDATE_PROGRESS, percent, 0);
 
             wchar_t percentText[50];
             wsprintf(percentText, L"%d%%", percent);
-            SetWindowText(g_hPercentText, percentText);
-
-            MSG msg;
-            while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-                TranslateMessage(&msg);
-                DispatchMessage(&msg);
-            }
+            PostMessage(hMainWnd, WM_UPDATE_STATUS, 0, (LPARAM)percentText);
         }
     }
 
@@ -182,7 +186,7 @@ bool DownloadFileWininet(const char* url, const char* outputFile) {
     InternetCloseHandle(hNet);
 
     if (totalBytesRead == 0) {
-        DeleteFileA(outputFile); 
+        DeleteFileA(outputFile);
         return false;
     }
 
@@ -204,10 +208,6 @@ bool ExtractResourceToFile(int resourceId, const wchar_t* filePath) {
 
     void* pResourceData = LockResource(hLoadedResource);
     DWORD resourceSize = SizeofResource(NULL, hResource);
-    
-    wchar_t msg[256];
-    wsprintf(msg, L"Ресурс найден! Размер: %d байт", resourceSize);
-    MessageBox(NULL, msg, L"Успех", MB_OK);
 
     FILE* fp = nullptr;
     errno_t err = _wfopen_s(&fp, filePath, L"wb");
@@ -219,9 +219,6 @@ bool ExtractResourceToFile(int resourceId, const wchar_t* filePath) {
     size_t written = fwrite(pResourceData, 1, resourceSize, fp);
     fclose(fp);
 
-    wsprintf(msg, L"Записано байт: %d из %d", written, resourceSize);
-    MessageBox(NULL, msg, L"Результат", MB_OK);
-
     return (written == resourceSize);
 }
 
@@ -230,7 +227,7 @@ bool CheckAndExtractFromResource(const wchar_t* filePath, bool is64bit) {
     errno_t err = _wfopen_s(&checkFile, filePath, L"rb");
     if (err == 0 && checkFile) {
         fclose(checkFile);
-        return true; 
+        return true;
     }
 
     int resourceId = is64bit ? IDR_7ZIP64 : IDR_7ZIP32;

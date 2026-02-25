@@ -27,8 +27,7 @@ bool SendStats(const std::wstring& startTime, const std::wstring& workMode,
     HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", L"/api/stats",
         NULL, WINHTTP_NO_REFERER,
         WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
-    if (hRequest == NULL) {
-        MessageBox(NULL, L"Не удалось создать запрос", L"Ошибка", MB_OK);
+    if (hRequest == NULL) {       
         WinHttpCloseHandle(hConnect);
         WinHttpCloseHandle(hSession);
         return false;
