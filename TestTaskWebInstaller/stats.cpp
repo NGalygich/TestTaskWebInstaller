@@ -54,8 +54,7 @@ bool SendStats(const std::wstring& startTime, const std::wstring& workMode,
     LPCWSTR headers = L"Content-Type: application/json\r\n";
 
     if (!WinHttpSendRequest(hRequest, headers, wcslen(headers),
-        (LPVOID)utf8Body.c_str(), utf8Body.length(), utf8Body.length(), 0)) {
-        MessageBox(NULL, L"Не удалось отправить запрос", L"Ошибка", MB_OK);
+        (LPVOID)utf8Body.c_str(), utf8Body.length(), utf8Body.length(), 0)) {        
         WinHttpCloseHandle(hRequest);
         WinHttpCloseHandle(hConnect);
         WinHttpCloseHandle(hSession);
