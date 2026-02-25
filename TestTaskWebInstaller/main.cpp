@@ -163,7 +163,7 @@ DWORD WINAPI DownloadThreadProc(LPVOID lpParam) {
     // если нужно скачать с оф. сайта 7-zip - заменить на этот вариант.
     //const char* url = is64bit
     //    ? "https://www.7-zip.org/a/7z2600-x64.exe"
-    //    : "https://www.7-zip.org/a/7z2600.exe";
+    //   : "https://www.7-zip.org/a/7z2600.exe";
 
 
     std::wstring downloadResult;
